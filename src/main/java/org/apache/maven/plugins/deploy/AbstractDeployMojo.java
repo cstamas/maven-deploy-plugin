@@ -18,6 +18,11 @@
  */
 package org.apache.maven.plugins.deploy;
 
+import javax.inject.Inject;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -25,7 +30,6 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.rtinfo.RuntimeInformation;
-import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.deployment.DeployRequest;
 import org.eclipse.aether.deployment.DeploymentException;
 import org.eclipse.aether.repository.RemoteRepository;
@@ -58,8 +62,8 @@ public abstract class AbstractDeployMojo extends AbstractMojo {
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     protected MavenSession session;
 
-    @Component
-    protected RepositorySystem repositorySystem;
+    @Inject
+    private Map<String, DeployerSPI> deployers;
 
     private static final String AFFECTED_MAVEN_PACKAGING = "maven-plugin";
 
@@ -122,36 +126,14 @@ public abstract class AbstractDeployMojo extends AbstractMojo {
         return result;
     }
 
-    // I'm not sure if retries will work with deploying on client level ...
-    // Most repository managers block a duplicate artifacts.
-
-    // Eg, when we have an artifact list, even simple pom and jar in one request with released version,
-    // next try can fail due to duplicate.
-
     protected void deploy(DeployRequest deployRequest) throws MojoExecutionException {
-        int retryFailedDeploymentCounter = Math.max(1, Math.min(10, retryFailedDeploymentCount));
-        DeploymentException exception = null;
-        for (int count = 0; count < retryFailedDeploymentCounter; count++) {
-            try {
-                if (count > 0) {
-                    getLog().info("Retrying deployment attempt " + (count + 1) + " of " + retryFailedDeploymentCounter);
-                }
-
-                repositorySystem.deploy(session.getRepositorySession(), deployRequest);
-                exception = null;
-                break;
-            } catch (DeploymentException e) {
-                if (count + 1 < retryFailedDeploymentCounter) {
-                    getLog().warn("Encountered issue during deployment: " + e.getLocalizedMessage());
-                    getLog().debug(e);
-                }
-                if (exception == null) {
-                    exception = e;
-                }
-            }
-        }
-        if (exception != null) {
-            throw new MojoExecutionException(exception.getMessage(), exception);
+        try {
+            DeployerSPI deployer = deployers.values().iterator().next();
+            HashMap<String, Object> parameters = new HashMap<>();
+            parameters.put("retryFailedDeploymentCount", retryFailedDeploymentCount);
+            deployer.deploy(session.getRepositorySession(), deployRequest, parameters);
+        } catch (DeploymentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
         }
     }
 }

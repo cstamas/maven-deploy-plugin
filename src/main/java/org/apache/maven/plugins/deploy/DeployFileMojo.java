@@ -52,7 +52,6 @@ import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.artifact.ArtifactType;
 import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.deployment.DeployRequest;
-import org.eclipse.aether.deployment.DeploymentException;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.util.artifact.SubArtifact;
 
@@ -373,9 +372,7 @@ public class DeployFileMojo extends AbstractDeployMojo {
         }
 
         try {
-            repositorySystem.deploy(session.getRepositorySession(), deployRequest);
-        } catch (DeploymentException e) {
-            throw new MojoExecutionException(e.getMessage(), e);
+            deploy(deployRequest);
         } finally {
             if (temporaryPom != null) {
                 // noinspection ResultOfMethodCallIgnored
